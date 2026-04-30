@@ -32,8 +32,11 @@ class RuntimeService:
         manifests: list[ReleaseManifestIn] = []
         for feature, release in rows:
             metadata = release.metadata_json or {}
-            backend_metadata = metadata.get("backend", {})
-            frontend_metadata = metadata.get("frontend", {})
+            if not isinstance(metadata, dict):
+                metadata = {}
+            frontend_metadata = metadata.get("frontend") or {}
+            if not isinstance(frontend_metadata, dict):
+                frontend_metadata = {}
 
             manifests.append(
                 ReleaseManifestIn(
@@ -45,21 +48,22 @@ class RuntimeService:
                     route=release.route,
                     frontend=FrontendSchema(
                         type=frontend_metadata.get("type", "module"),
-                        enabled=frontend_metadata.get("enabled", True),
                         entryUrl=release.entry_url,
-                        mountFunction=frontend_metadata.get("mountFunction", "mount"),
                         integrity=metadata.get("integrity"),
                         basePath=frontend_metadata.get("basePath", release.route),
                     ),
                     backend=BackendSchema(
-                        enabled=backend_metadata.get("enabled", True),
                         apiBaseUrl=release.api_base_url,
-                        healthEndpoint=backend_metadata.get("healthEndpoint", "/health"),
                     ),
                     nav=NavSchema(**(release.nav_json or {})),
                     authorization=AuthorizationSchema(**(release.authorization_json or {})),
                     compatibility=CompatibilitySchema(**(release.compatibility_json or {})),
-                    metadata=MetadataSchema(**(metadata or {})),
+                    metadata=MetadataSchema(
+                        ownerTeam=metadata.get("ownerTeam") or feature.display_name,
+                        commitSha=metadata.get("commitSha"),
+                        buildId=metadata.get("buildId"),
+                        releaseDate=metadata.get("releaseDate"),
+                    ),
                 )
             )
         return manifests

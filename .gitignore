@@ -1,0 +1,51 @@
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Environment files (secrets) — keep template tracked
+.env
+.env.*
+!.env.example
+
+# Packaging / build
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Type checkers / linters (if added later)
+.mypy_cache/
+.ruff_cache/
+
+# IDE (uncomment if you do not want these in git)
+# .idea/
+# .vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local archives / large artifacts sometimes dropped in-repo
+*.tar.gz
+*.AppImage
+
+# Terraform local state (if ever run from repo root)
+.terraform/
+*.tfstate
+*.tfstate.*

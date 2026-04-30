@@ -20,8 +20,8 @@ done
 echo "[registry] Running migrations..."
 PYTHONPATH="$ROOT_DIR" alembic upgrade head
 
-echo "[registry] Seeding local data..."
-PYTHONPATH="$ROOT_DIR" python scripts/seed_local.py
+# echo "[registry] Seeding local data..."
+# PYTHONPATH="$ROOT_DIR" python scripts/seed_local.py
 
 echo "[registry] Starting API on http://localhost:8010"
 PYTHONPATH="$ROOT_DIR" uvicorn app.main:app --reload --host 0.0.0.0 --port 8010

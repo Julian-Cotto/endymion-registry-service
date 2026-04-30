@@ -1,5 +1,7 @@
 # Portal Platform — Registry Service Engineering & Development Guide
 
+This file lives at **`doc/REGISTRY_SERVICE_ENGINEERING_GUIDE.md`**. For day-to-day commands (venv, Compose, pytest, env vars), start from the repository **[README.md](../README.md)**.
+
 ## 1. Purpose
 
 This document defines the engineering, development, deployment, and operational standards for the **Registry Service** in the portal platform.
@@ -282,8 +284,8 @@ Recommended release states:
 ### 10.2 Important platform rules
 
 - publish does not imply activate
-- only one active release per feature per environment
-- active routes must be unique per environment
+- only one active release per feature per environment (the reference `ActivationService` marks the previous `active` release `inactive` before activating the target)
+- active routes should be unique per environment across features (recommended; not enforced beyond activation per feature in the reference code — see §15)
 - retired releases cannot be reactivated
 - runtime endpoint must return only active releases
 
@@ -291,23 +293,28 @@ Recommended release states:
 
 ## 11. Repository structure
 
-Recommended structure:
+Layout of this repository (reference scaffold):
 
 ```text
-portal-registry-service/
-├── REGISTRY_SERVICE_ENGINEERING_GUIDE.md
-├── README.md
-├── requirements.txt
+platform-registry-service/
+├── README.md                          # quick start, env, tests, API summary
+├── requirements.txt                   # runtime + pytest/httpx/coverage deps
+├── pytest.ini                         # pytest pythonpath / testpaths
 ├── Dockerfile
+├── docker-compose.yml                 # local Postgres (port 5433 on host)
 ├── alembic.ini
+├── .env.example
 ├── app/
-│   ├── api/
-│   ├── core/
-│   ├── db/
-│   ├── schemas/
-│   ├── services/
+│   ├── api/                           # routes: runtime, releases, admin
+│   ├── core/                          # config (pydantic-settings), security
+│   ├── db/                            # SQLAlchemy models, session (lazy engine)
+│   ├── schemas/                       # Pydantic: manifest, release, runtime DTOs
+│   ├── services/                      # validator, release, activation, runtime, audit
 │   ├── exceptions.py
 │   └── main.py
+├── tests/                             # pytest: conftest (Postgres fixtures), API + unit tests
+├── doc/
+│   └── REGISTRY_SERVICE_ENGINEERING_GUIDE.md
 ├── infra/
 │   ├── providers.tf
 │   ├── variables.tf
@@ -321,10 +328,12 @@ portal-registry-service/
 │   ├── env.py
 │   └── versions/
 ├── scripts/
+│   ├── run_local.sh                   # compose up, migrate, uvicorn :8010
+│   ├── seed_local.py                  # optional local seed (active releases)
 │   ├── build_image.sh
 │   ├── deploy_registry.sh
 │   ├── run_migrations.sh
-│   └── smoke_test.sh
+│   └── smoke_test.sh                  # curls REGISTRY_BASE_URL/health
 └── .github/
     └── workflows/
         └── registry-release.yml
@@ -370,29 +379,24 @@ Deployment and operational helper scripts.
 ### 13.1 `features`
 Stable feature identity.
 
-Fields:
-- feature key
+Fields (see `app/db/models.py`):
+- feature key (unique)
 - display name
 - owner team
-- repository URL
+- optional repository URL (`repo_url`)
 
 ### 13.2 `releases`
 A feature version in an environment.
 
-Fields:
-- feature ID
-- manifest version
-- release version
-- environment
-- status
-- route
-- frontend entry URL
-- backend API base URL
-- nav metadata
-- authorization metadata
-- compatibility metadata
-- release metadata
-- activation time
+Fields (see `app/db/models.py`):
+- feature ID (FK)
+- manifest version string
+- release version and environment
+- status (`ReleaseStatus` enum: draft, candidate, active, inactive, retired, failed)
+- route, frontend entry URL, backend API base URL (scalar columns for runtime projection)
+- `nav_json`, `authorization_json`, `compatibility_json`, `metadata_json` (JSONB)
+- soft delete flag `is_deleted`
+- activation timestamp when made active
 
 ### 13.3 `audits`
 Action history.
@@ -473,26 +477,24 @@ The release manifest is the interface between feature CI/CD and the registry. It
 
 ## 15. Validation rules
 
-The registry must reject invalid manifests.
+The registry must reject invalid manifests. The **reference code** in this repository implements the following (see `app/schemas/manifest.py` and `app/services/manifest_validator.py`):
 
-Minimum validation:
+**Enforced in code today**
 
-- version must be semver
-- route must start with `/`
-- frontend entry URL must use HTTPS
-- backend API base URL must use HTTPS
-- frontend host must be in approved host list
-- backend host must be in approved host list
-- manifest version must be supported
-- duplicate route conflicts must be prevented for active releases
-- feature key scope must be allowed for the calling pipeline
+- `version`: semver pattern (e.g. `1.0.0`, optional pre-release suffix).
+- `route`: must start with `/`.
+- `featureKey`: lowercase letters, digits, hyphens only.
+- `environment`: one of `local`, `dev`, `test`, `uat`, `staging`, `prod`, `production`.
+- `frontend.type`: must be `module` (only remote module loading is supported in the validator).
+- `frontend.entryUrl` / `backend.apiBaseUrl`: hostnames must appear in `ALLOWED_FRONTEND_HOSTS` and `ALLOWED_API_HOSTS` respectively (comma-separated settings; defaults include `localhost` and `127.0.0.1`). URLs are parsed with Pydantic `HttpUrl` — **HTTP is allowed** for local hosts; production should still use HTTPS end-to-end.
+- `authorization.requiredPermissions` / `requiredFlags`: non-empty; each entry matches `^[a-z0-9-]+\.[a-z0-9-]+$` after deduplication/trimming in the schema layer, with an additional permission/flag pattern check in the manifest validator.
+- Publish path checks **feature scope** when `AUTH_DISABLED` is false: JWT (or mock dev token) claims must allow the manifest’s `featureKey` unless the caller has a wildcard scope.
 
-Optional stronger validation:
+**Recommended platform rules (not all enforced in this scaffold)**
 
-- HEAD request or GET request confirms entry URL exists
-- health endpoint confirms backend is reachable
-- nav labels conform to naming standards
-- compatibility range is not malformed
+- Prefer HTTPS for all entry and API URLs in non-local environments.
+- Prevent duplicate **active** routes across different features in the same environment (would require extra DB constraints or application checks; not implemented in the reference `ReleaseService` beyond idempotent publish by feature/version/environment).
+- Optional stronger validation: URL reachability checks, nav naming standards, stricter compatibility parsing (HEAD/GET to entry URL, backend health probe, etc.).
 
 ---
 
@@ -608,6 +610,17 @@ Shell authorization decides:
 Feature API authorization decides:
 - may user perform the business action?
 
+### 18.5 Local development authentication (`AUTH_DISABLED`)
+
+When `AUTH_DISABLED=true` (default in `.env.example`), `get_principal_from_request` returns a synthetic principal with all registry roles and wildcard feature scope. **Do not use this mode outside local development.**
+
+When `AUTH_DISABLED=false`, callers must send `Authorization: Bearer <token>`. The reference implementation includes **mock** JWT decoding for development only (`app/core/security.py`):
+
+- `shell-read-token` — runtime read audience and `registry.runtime.read` role.
+- `pipeline-write-token` — admin audience, write/activate roles, and `feature_keys` limited to `orders` (used to test pipeline scope without Entra).
+
+Production should replace `_mock_decode_for_dev` with real Entra validation and JWKS.
+
 ---
 
 ## 19. CI/CD model
@@ -616,12 +629,12 @@ Feature API authorization decides:
 
 Registry service pipeline should:
 
-1. run lint and tests
+1. run lint and tests (this repo includes a **pytest** suite under `tests/`; the current `registry-release.yml` workflow runs a Python import check — extend it with `pytest tests/` and a Postgres **service** job or shared test database as you mature CI)
 2. build container image
 3. push image to shared ACR
 4. deploy registry Container App
 5. run database migrations
-6. smoke test `/health`
+6. smoke test `/health` (see `scripts/smoke_test.sh` and `REGISTRY_BASE_URL`)
 7. optionally smoke test runtime endpoint
 
 ### 19.2 Feature repository pipeline interaction with registry
@@ -672,22 +685,31 @@ Recommended metadata to include in logs:
 
 ## 22. Testing strategy
 
-### 22.1 Unit tests
-- manifest validation
-- activation logic
-- runtime projection logic
+### 22.1 What exists in this repository
 
-### 22.2 Integration tests
-- release publish against test DB
-- activate release and verify uniqueness rules
-- runtime endpoint returns active releases only
+- **`tests/`** — Pytest layout: `conftest.py` provides a PostgreSQL engine (skips DB-backed tests if the server is unavailable), truncates app tables between tests, and overrides FastAPI `get_db` for HTTP tests.
+- **Unit-style tests** — Pydantic manifest schema, `ManifestValidator`, security helpers (`Principal`, roles, feature scope), config helpers, `get_db` session close behavior.
+- **Integration tests** — `ReleaseService` / `ActivationService` / `RuntimeService` / `AuditService` against a real Postgres; API tests for publish, activate, runtime features, validation HTTP status codes, and pipeline feature-scope denial.
 
-### 22.3 Contract tests
-- ensure runtime response schema stays stable
-- ensure manifest input stays compatible
+Run locally (Postgres up, schema migrated):
 
-### 22.4 Deployment smoke tests
-- `/health` returns 200
+```bash
+PYTHONPATH=. alembic upgrade head
+PYTHONPATH=. pytest tests/ --cov=app --cov-report=term-missing
+```
+
+Optional: `TEST_DATABASE_URL` overrides the default `postgresql+psycopg://registry:registry@127.0.0.1:5433/portal_registry`.
+
+Use the **same virtualenv** as `pip install -r requirements.txt` so `psycopg` is available when integration tests connect.
+
+### 22.2 Recommended additions
+
+- Contract tests for stable runtime JSON shape vs shell consumers.
+- CI job with a Postgres service container and `pytest` before image build.
+
+### 22.3 Deployment smoke tests
+
+- `/health` returns 200 (`scripts/smoke_test.sh`)
 - publish candidate release in test environment
 - activate test release
 - runtime endpoint returns expected manifest
@@ -708,18 +730,24 @@ Recommended metadata to include in logs:
 ## 24. Local development guidance
 
 ### 24.1 Local app run
-- local Postgres or dev shared Postgres
-- `AUTH_DISABLED=true` allowed only for local development
-- use migrations before app run
-- validate sample manifests locally
 
-### 24.2 Local startup sequence
-1. create Python virtual environment
-2. install requirements
-3. configure `.env`
-4. run Alembic migration
-5. run Uvicorn
-6. call `/health`
+- **Postgres**: easiest path is `docker compose up -d db` (see `docker-compose.yml`: database `portal_registry`, user/password `registry`, host port **5433**).
+- **`AUTH_DISABLED=true`**: only for local development (see §18.5).
+- **Migrations**: run `alembic upgrade head` before first API use (included in `scripts/run_local.sh`).
+- **Sample data**: optional `scripts/seed_local.py` (or uncomment the seed lines in `run_local.sh`) inserts active-style rows for local shell testing.
+
+### 24.2 Local startup sequence (automated)
+
+1. Create a Python virtual environment and `pip install -r requirements.txt`.
+2. Ensure `.env` exists (`cp .env.example .env` or let `run_local.sh` copy it).
+3. Run **`./scripts/run_local.sh`** — starts Compose Postgres, waits for `pg_isready`, runs Alembic, starts **Uvicorn** at **http://0.0.0.0:8010** (OpenAPI at `/docs`).
+
+### 24.3 Manual sequence
+
+1. `docker compose up -d db`
+2. `PYTHONPATH=. alembic upgrade head`
+3. `PYTHONPATH=. uvicorn app.main:app --reload --host 0.0.0.0 --port 8010`
+4. `curl -s http://localhost:8010/health`
 
 ---
 
@@ -751,4 +779,4 @@ The most important design principles are:
 6. security is split between runtime reads and admin writes
 7. rollback must be fast and mostly configuration-driven
 
-This repository includes a full reference scaffold aligned to these principles.
+This repository includes a reference FastAPI implementation and tests aligned to these principles. Operational commands and configuration tables are maintained in the root **README.md** alongside this guide.
