@@ -9,7 +9,8 @@ __pycache__/
 venv/
 ENV/
 
-# Environment files (secrets) — keep template tracked
+# Environment files (secrets) — keep template tracked.
+# Git only ignores untracked paths; if .env was committed earlier, run: git rm --cached .env
 .env
 .env.*
 !.env.example
