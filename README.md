@@ -60,6 +60,11 @@ The DB engine is created **lazily** on first use (`app/db/session.py`), so impor
 
 OpenAPI: **http://localhost:8010/docs** when the app is running.
 
+### Manifest: `authorization` vs `auth`
+
+- **`authorization`** — feature-level hints for the shell (required permissions and flags). Validated on publish; stored in `releases.authorization_json`.
+- **`auth`** — how the feature expects the shell to handle **authentication / token forwarding** toward the feature API (mode, token strategy, dev modes, etc.). Optional on ingest: defaults come from `AuthSchema` in `app/schemas/manifest.py`. Stored in **`releases.auth_json`** (see migration `0002_add_release_auth_json`). The runtime response includes both blocks so the shell can apply the same policy for active features.
+
 ## Tests
 
 Integration tests expect **PostgreSQL** with the migrated schema (same defaults as Compose: user/password/db `registry` / `portal_registry`, port **5433**).
@@ -91,3 +96,5 @@ Use this repository’s virtualenv when running pytest so `psycopg` and other de
 | `doc/` | Engineering guide |
 | `infra/` | Registry-scoped Terraform |
 | `scripts/` | `run_local.sh`, `seed_local.py`, image build, deploy, migrations, smoke test |
+
+Do **not** commit `.venv/`, `__pycache__/`, or `*.pyc` — they are listed in `.gitignore` and are recreated locally.
