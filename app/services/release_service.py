@@ -36,6 +36,7 @@ class ReleaseService:
                 Release.environment == manifest.environment,
             )
         )
+
         if existing:
             return existing
 
@@ -50,9 +51,11 @@ class ReleaseService:
             api_base_url=str(manifest.backend.apiBaseUrl),
             nav_json=manifest.nav.model_dump(),
             authorization_json=manifest.authorization.model_dump(),
+            auth_json=manifest.auth.model_dump(),
             compatibility_json=manifest.compatibility.model_dump(),
             metadata_json=manifest.metadata.model_dump(),
         )
+
         self.db.add(release)
         self.db.flush()
         return release

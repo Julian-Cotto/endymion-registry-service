@@ -24,7 +24,23 @@ def test_release_service_publish_idempotent(db_session):
     r1 = svc.publish_release(m)
     r2 = svc.publish_release(m)
     assert r1.id == r2.id
+    assert r1.auth_json["mode"] == "entra"
     db_session.commit()
+
+
+def test_release_service_persists_auth_json(db_session):
+    svc = ReleaseService(db_session)
+    rel = svc.publish_release(_manifest())
+
+    assert rel.auth_json == {
+        "required": True,
+        "mode": "entra",
+        "shellAuthRequired": True,
+        "tokenForwarding": True,
+        "tokenStrategy": "forwarded-bearer",
+        "allowedDevModes": ["mock"],
+        "roles": [],
+    }
 
 
 def test_activation_service_happy_path(db_session):
@@ -75,6 +91,8 @@ def test_runtime_service_active_manifests(db_session):
     assert len(manifests) == 1
     assert manifests[0].featureKey == "orders"
     assert str(manifests[0].frontend.entryUrl).startswith("http://localhost:3200")
+    assert manifests[0].auth.mode == "entra"
+    assert manifests[0].auth.tokenForwarding is True
 
 
 def test_runtime_service_empty_environment(db_session):
@@ -85,7 +103,6 @@ def test_runtime_service_coerces_non_dict_frontend_metadata(db_session):
     rel_svc = ReleaseService(db_session)
     rel = rel_svc.publish_release(_manifest())
     rel.status = ReleaseStatus.active
-    # Truthy but not a dict — must not use `[] or {}` which collapses to `{}` before isinstance.
     rel.metadata_json = {"frontend": "not-a-dict", "ownerTeam": "platform"}
     db_session.flush()
 
@@ -107,7 +124,6 @@ def test_runtime_service_coerces_non_dict_root_metadata(db_session):
 
 
 def test_session_local_opens_connection(postgres_engine):
-    """Covers lazy engine/sessionmaker; API tests use get_db override and skip this path."""
     s = SessionLocal()
     try:
         assert s.execute(text("SELECT 1")).scalar_one() == 1

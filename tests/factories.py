@@ -19,6 +19,15 @@ def sample_manifest_dict(**overrides: object) -> dict:
             "requiredPermissions": ["orders.view"],
             "requiredFlags": ["orders.enabled"],
         },
+        "auth": {
+            "required": True,
+            "mode": "entra",
+            "shellAuthRequired": True,
+            "tokenForwarding": True,
+            "tokenStrategy": "forwarded-bearer",
+            "allowedDevModes": ["mock"],
+            "roles": [],
+        },
         "compatibility": {"shellContractMin": "v1"},
         "metadata": {"ownerTeam": "platform"},
     }

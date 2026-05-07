@@ -73,6 +73,9 @@ def test_runtime_features_after_activation(client):
     assert data["environment"] == "local"
     assert len(data["features"]) == 1
     assert data["features"][0]["featureKey"] == "orders"
+    assert data["features"][0]["auth"]["mode"] == "entra"
+    assert data["features"][0]["auth"]["tokenForwarding"] is True
+    assert data["features"][0]["auth"]["tokenStrategy"] == "forwarded-bearer"
 
 
 def test_runtime_features_empty(client):
