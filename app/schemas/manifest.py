@@ -32,13 +32,34 @@ class NavSchema(BaseModel):
 
 class FrontendSchema(BaseModel):
     type: str = "module"
-    entryUrl: HttpUrl
+    # Accept either an absolute URL (http(s)://...) or a same-origin path
+    # (e.g. "/_mfe/asset-inventory/...") so shells can proxy MFEs same-origin.
+    entryUrl: str
     integrity: str | None = None
     basePath: str = "/"
 
+    @field_validator("entryUrl")
+    @classmethod
+    def entry_url_format(cls, value: str) -> str:
+        if value.startswith(("http://", "https://", "/")):
+            return value
+        raise ValueError(
+            "frontend.entryUrl must be an absolute URL or start with '/'"
+        )
+
 
 class BackendSchema(BaseModel):
-    apiBaseUrl: HttpUrl
+    # Accept absolute URL or same-origin path (shell proxies APIs same-origin).
+    apiBaseUrl: str
+
+    @field_validator("apiBaseUrl")
+    @classmethod
+    def api_base_url_format(cls, value: str) -> str:
+        if value.startswith(("http://", "https://", "/")):
+            return value
+        raise ValueError(
+            "backend.apiBaseUrl must be an absolute URL or start with '/'"
+        )
 
 
 class AuthorizationSchema(BaseModel):

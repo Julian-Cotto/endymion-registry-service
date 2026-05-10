@@ -8,23 +8,23 @@ from app.db.session import SessionLocal
 
 LOCAL_MANIFESTS = [
     {
-        "feature_key": "orders",
-        "display_name": "Orders",
+        "feature_key": "asset-inventory",
+        "display_name": "IT Asset Inventory",
         "owner_team": "platform",
         "version": "1.0.0",
         "environment": "local",
-        "route": "/orders",
-        "entry_url": "http://localhost:3200/src/bootstrap-entry.tsx",
-        "api_base_url": "http://localhost:8100/api/orders",
+        "route": "/inventory/it",
+        "entry_url": "/_mfe/asset-inventory/src/bootstrap-entry.tsx",
+        "api_base_url": "/api/inventory/it",
         "nav_json": {
-            "label": "Orders",
+            "label": "IT Inventory",
             "icon": "package",
             "group": None,
             "order": 10,
         },
         "authorization_json": {
-            "requiredPermissions": ["orders.view"],
-            "requiredFlags": ["orders.enabled"],
+            "requiredPermissions": ["asset-inventory.view"],
+            "requiredFlags": ["asset-inventory.enabled"],
         },
         "compatibility_json": {
             "shellContractMin": "v1",
@@ -36,48 +36,11 @@ LOCAL_MANIFESTS = [
                 "type": "module",
                 "enabled": True,
                 "mountFunction": "mount",
-                "basePath": "/orders",
+                "basePath": "/inventory/it",
             },
             "backend": {
                 "enabled": True,
-                "healthEndpoint": "/health",
-            },
-        },
-    },
-    {
-        "feature_key": "catalog",
-        "display_name": "Catalog",
-        "owner_team": "platform",
-        "version": "1.0.0",
-        "environment": "local",
-        "route": "/catalog",
-        "entry_url": "http://localhost:3300/src/bootstrap-entry.tsx",
-        "api_base_url": "http://localhost:8200/api/catalog",
-        "nav_json": {
-            "label": "Catalog",
-            "icon": "boxes",
-            "group": None,
-            "order": 20,
-        },
-        "authorization_json": {
-            "requiredPermissions": ["catalog.view"],
-            "requiredFlags": ["catalog.enabled"],
-        },
-        "compatibility_json": {
-            "shellContractMin": "v1",
-            "shellContractMax": "v1",
-        },
-        "metadata_json": {
-            "ownerTeam": "platform",
-            "frontend": {
-                "type": "module",
-                "enabled": True,
-                "mountFunction": "mount",
-                "basePath": "/catalog",
-            },
-            "backend": {
-                "enabled": True,
-                "healthEndpoint": "/health",
+                "healthEndpoint": "/api/inventory/it/health",
             },
         },
     },
@@ -164,7 +127,7 @@ def main() -> None:
             upsert_active_release(db, feature, item)
 
         db.commit()
-        print("Seeded local registry features: orders, catalog")
+        print("Seeded local registry features: " + ", ".join(m["feature_key"] for m in LOCAL_MANIFESTS))
     finally:
         db.close()
 
