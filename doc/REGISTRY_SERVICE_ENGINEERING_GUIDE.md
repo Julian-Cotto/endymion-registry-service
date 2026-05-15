@@ -217,6 +217,15 @@ GET /api/runtime/features?environment=prod
         "requiredPermissions": ["orders.view"],
         "requiredFlags": ["orders.enabled"]
       },
+      "auth": {
+        "required": true,
+        "mode": "entra",
+        "shellAuthRequired": true,
+        "tokenForwarding": true,
+        "tokenStrategy": "forwarded-bearer",
+        "allowedDevModes": ["mock"],
+        "roles": []
+      },
       "compatibility": {
         "shellContractMin": "1.0",
         "shellContractMax": "1.x"
@@ -326,7 +335,7 @@ platform-registry-service/
 │   └── terraform.tfvars.example
 ├── migrations/
 │   ├── env.py
-│   └── versions/
+│   └── versions/                      # e.g. 0001_init_registry, 0002_add_release_auth_json
 ├── scripts/
 │   ├── run_local.sh                   # compose up, migrate, uvicorn :8010
 │   ├── seed_local.py                  # optional local seed (active releases)
@@ -353,7 +362,7 @@ Configuration, security, and cross-cutting concerns.
 SQLAlchemy models and session setup.
 
 ### 12.4 `app/schemas`
-Pydantic request and response models.
+Pydantic request and response models. The release manifest (`ReleaseManifestIn`) includes **`authorization`** (permission/flag hints) and **`auth`** (shell/API auth and token-forwarding policy); see §14.
 
 ### 12.5 `app/services`
 Business logic:
@@ -394,7 +403,7 @@ Fields (see `app/db/models.py`):
 - release version and environment
 - status (`ReleaseStatus` enum: draft, candidate, active, inactive, retired, failed)
 - route, frontend entry URL, backend API base URL (scalar columns for runtime projection)
-- `nav_json`, `authorization_json`, `compatibility_json`, `metadata_json` (JSONB)
+- `nav_json`, `authorization_json`, **`auth_json`** (shell/token auth policy), `compatibility_json`, `metadata_json` (JSONB)
 - soft delete flag `is_deleted`
 - activation timestamp when made active
 
@@ -429,7 +438,10 @@ The release manifest is the interface between feature CI/CD and the registry. It
 - `frontend.entryUrl`
 - `backend.apiBaseUrl`
 - `nav`
+- `authorization` (non-empty `requiredPermissions` and `requiredFlags`; see §15)
 - `metadata.ownerTeam`
+
+**Optional with defaults:** `auth` — if omitted, the API applies `AuthSchema` defaults (`mode` defaults to `mock`, etc.). Publish persists the resolved object to `releases.auth_json`.
 
 ### 14.3 Example manifest
 
@@ -460,6 +472,15 @@ The release manifest is the interface between feature CI/CD and the registry. It
     "requiredPermissions": ["orders.view"],
     "requiredFlags": ["orders.enabled"]
   },
+  "auth": {
+    "required": true,
+    "mode": "entra",
+    "shellAuthRequired": true,
+    "tokenForwarding": true,
+    "tokenStrategy": "forwarded-bearer",
+    "allowedDevModes": ["mock"],
+    "roles": []
+  },
   "compatibility": {
     "shellContractMin": "1.0",
     "shellContractMax": "1.x"
@@ -472,6 +493,11 @@ The release manifest is the interface between feature CI/CD and the registry. It
   }
 }
 ```
+
+### 14.4 `authorization` vs `auth`
+
+- **`authorization`** — Declares what the feature expects for **end-user / feature access** (permission and flag IDs). The shell uses this with its own authz model; the registry does not evaluate these claims.
+- **`auth`** — Declares how the feature expects **tokens and shell authentication** to interact with the feature backend (e.g. Entra vs mock, whether to forward a bearer token, allowed dev modes). Persisted separately as `authorization_json` vs `auth_json` on `releases` so runtime responses carry both.
 
 ---
 
@@ -488,6 +514,13 @@ The registry must reject invalid manifests. The **reference code** in this repos
 - `frontend.type`: must be `module` (only remote module loading is supported in the validator).
 - `frontend.entryUrl` / `backend.apiBaseUrl`: hostnames must appear in `ALLOWED_FRONTEND_HOSTS` and `ALLOWED_API_HOSTS` respectively (comma-separated settings; defaults include `localhost` and `127.0.0.1`). URLs are parsed with Pydantic `HttpUrl` — **HTTP is allowed** for local hosts; production should still use HTTPS end-to-end.
 - `authorization.requiredPermissions` / `requiredFlags`: non-empty; each entry matches `^[a-z0-9-]+\.[a-z0-9-]+$` after deduplication/trimming in the schema layer, with an additional permission/flag pattern check in the manifest validator.
+- **`auth`** (Pydantic `AuthSchema`): validated on publish when present (defaults apply when omitted). In the reference code:
+  - `mode`: one of `entra`, `mock`, `none` (case-insensitive input, stored normalized).
+  - `tokenStrategy`: optional; if set, one of `forwarded-bearer`, `bearer`, `shell-session`, `none`, `forward_access_token`.
+  - `allowedDevModes`: each entry one of `entra`, `mock`, `none`.
+  - `roles`: deduped non-empty strings (no fixed pattern beyond normalization).
+  - Other fields: `required`, `shellAuthRequired`, `tokenForwarding` (booleans).  
+  The manifest validator (`ManifestValidator`) still focuses on semver, hosts, `frontend.type`, and authorization strings; **`auth` shape is enforced by Pydantic**, not duplicated there.
 - Publish path checks **feature scope** when `AUTH_DISABLED` is false: JWT (or mock dev token) claims must allow the manifest’s `featureKey` unless the caller has a wildcard scope.
 
 **Recommended platform rules (not all enforced in this scaffold)**

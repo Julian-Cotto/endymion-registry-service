@@ -54,6 +54,7 @@ class Release(Base):
 
     nav_json: Mapped[dict] = mapped_column(JSONB, default=dict)
     authorization_json: Mapped[dict] = mapped_column(JSONB, default=dict)
+    auth_json: Mapped[dict] = mapped_column(JSONB, default=dict)
     compatibility_json: Mapped[dict] = mapped_column(JSONB, default=dict)
     metadata_json: Mapped[dict] = mapped_column(JSONB, default=dict)
 

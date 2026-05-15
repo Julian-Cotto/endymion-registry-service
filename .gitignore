@@ -8,12 +8,14 @@ __pycache__/
 .venv/
 venv/
 ENV/
+env/
 
 # Environment files (secrets) — keep template tracked.
 # Git only ignores untracked paths; if .env was committed earlier, run: git rm --cached .env
 .env
 .env.*
 !.env.example
+.envrc
 
 # Packaging / build
 *.egg-info/
@@ -21,29 +23,46 @@ ENV/
 dist/
 build/
 *.egg
+pip-wheel-metadata/
+share/python-wheels/
 
 # Test / coverage
 .pytest_cache/
 .coverage
 .coverage.*
+coverage.xml
+*.cover
+.hypothesis/
 htmlcov/
 .tox/
 .nox/
 
-# Type checkers / linters (if added later)
+# Type checkers / linters
 .mypy_cache/
+.dmypy.json
+dmypy.json
 .ruff_cache/
 
 # IDE (uncomment if you do not want these in git)
 # .idea/
 # .vscode/
 
-# OS
+# OS / editor junk
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Local scratch / temp directories
+tmp/
 
 # Local archives / large artifacts sometimes dropped in-repo
 *.tar.gz
+*.tgz
 *.AppImage
 
 # Terraform local state (if ever run from repo root)

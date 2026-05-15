@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Feature, Release, ReleaseStatus
 from app.schemas.manifest import (
+    AuthSchema,
     AuthorizationSchema,
     BackendSchema,
     CompatibilitySchema,
@@ -30,13 +31,19 @@ class RuntimeService:
         ).all()
 
         manifests: list[ReleaseManifestIn] = []
+
         for feature, release in rows:
             metadata = release.metadata_json or {}
             if not isinstance(metadata, dict):
                 metadata = {}
+
             frontend_metadata = metadata.get("frontend") or {}
             if not isinstance(frontend_metadata, dict):
                 frontend_metadata = {}
+
+            auth = release.auth_json or {}
+            if not isinstance(auth, dict):
+                auth = {}
 
             manifests.append(
                 ReleaseManifestIn(
@@ -57,6 +64,7 @@ class RuntimeService:
                     ),
                     nav=NavSchema(**(release.nav_json or {})),
                     authorization=AuthorizationSchema(**(release.authorization_json or {})),
+                    auth=AuthSchema(**auth),
                     compatibility=CompatibilitySchema(**(release.compatibility_json or {})),
                     metadata=MetadataSchema(
                         ownerTeam=metadata.get("ownerTeam") or feature.display_name,
@@ -66,4 +74,5 @@ class RuntimeService:
                     ),
                 )
             )
+
         return manifests

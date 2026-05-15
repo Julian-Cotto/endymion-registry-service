@@ -93,6 +93,63 @@ class AuthorizationSchema(BaseModel):
         return normalized
 
 
+class AuthSchema(BaseModel):
+    required: bool = True
+    mode: str = "mock"
+    shellAuthRequired: bool = True
+    tokenForwarding: bool = False
+    tokenStrategy: str | None = None
+    allowedDevModes: list[str] = Field(default_factory=list)
+    roles: list[str] = Field(default_factory=list)
+
+    @field_validator("mode")
+    @classmethod
+    def mode_must_be_supported(cls, value: str) -> str:
+        normalized = value.strip().lower()
+
+        if normalized not in {"entra", "mock", "none"}:
+            raise ValueError("auth.mode must be one of: entra, mock, none")
+
+        return normalized
+
+    @field_validator("tokenStrategy")
+    @classmethod
+    def token_strategy_must_be_supported(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+
+        normalized = value.strip()
+
+        if normalized not in {
+            "forwarded-bearer",
+            "bearer",
+            "shell-session",
+            "none",
+            "forward_access_token",
+        }:
+            raise ValueError(
+                "auth.tokenStrategy must be one of: forwarded-bearer, bearer, shell-session, none, forward_access_token"
+            )
+
+        return normalized
+
+    @field_validator("allowedDevModes")
+    @classmethod
+    def allowed_dev_modes_must_be_supported(cls, values: list[str]) -> list[str]:
+        normalized = _dedupe_non_empty(values)
+
+        for value in normalized:
+            if value not in {"entra", "mock", "none"}:
+                raise ValueError("auth.allowedDevModes values must be one of: entra, mock, none")
+
+        return normalized
+
+    @field_validator("roles")
+    @classmethod
+    def roles_must_be_normalized(cls, values: list[str]) -> list[str]:
+        return _dedupe_non_empty(values)
+
+
 class CompatibilitySchema(BaseModel):
     shellContractMin: str | None = None
     shellContractMax: str | None = None
@@ -116,6 +173,7 @@ class ReleaseManifestIn(BaseModel):
     backend: BackendSchema
     nav: NavSchema
     authorization: AuthorizationSchema
+    auth: AuthSchema = Field(default_factory=AuthSchema)
     compatibility: CompatibilitySchema = Field(default_factory=CompatibilitySchema)
     metadata: MetadataSchema
 

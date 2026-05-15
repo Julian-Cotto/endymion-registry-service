@@ -21,6 +21,15 @@ def _minimal_valid() -> dict:
             "requiredPermissions": ["orders.view"],
             "requiredFlags": ["orders.enabled"],
         },
+        "auth": {
+            "required": True,
+            "mode": "entra",
+            "shellAuthRequired": True,
+            "tokenForwarding": True,
+            "tokenStrategy": "forwarded-bearer",
+            "allowedDevModes": ["mock"],
+            "roles": [],
+        },
         "metadata": {"ownerTeam": "platform"},
     }
 
@@ -29,6 +38,36 @@ def test_release_manifest_in_valid():
     m = ReleaseManifestIn.model_validate(_minimal_valid())
     assert m.featureKey == "orders"
     assert m.environment == "local"
+    assert m.auth.mode == "entra"
+    assert m.auth.tokenForwarding is True
+
+
+def test_release_manifest_defaults_auth_for_backward_compatibility():
+    data = _minimal_valid()
+    data.pop("auth")
+
+    m = ReleaseManifestIn.model_validate(data)
+
+    assert m.auth.mode == "mock"
+    assert m.auth.tokenForwarding is False
+
+
+def test_auth_mode_invalid():
+    with pytest.raises(ValidationError, match="auth.mode"):
+        ReleaseManifestIn.model_validate(
+            {
+                **_minimal_valid(),
+                "auth": {
+                    "required": True,
+                    "mode": "invalid",
+                    "shellAuthRequired": True,
+                    "tokenForwarding": True,
+                    "tokenStrategy": "forwarded-bearer",
+                    "allowedDevModes": ["mock"],
+                    "roles": [],
+                },
+            }
+        )
 
 
 def test_feature_key_invalid():
