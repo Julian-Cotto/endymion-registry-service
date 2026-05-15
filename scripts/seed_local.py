@@ -44,6 +44,43 @@ LOCAL_MANIFESTS = [
             },
         },
     },
+    {
+        "feature_key": "continued-education",
+        "display_name": "Continued Education",
+        "owner_team": "platform",
+        "version": "0.1.0",
+        "environment": "local",
+        "route": "/education/continued-ed",
+        "entry_url": "/_mfe/continued-education/src/bootstrap-entry.tsx",
+        "api_base_url": "/api/education/continued-ed",
+        "nav_json": {
+            "label": "Continued Education",
+            "icon": "graduation-cap",
+            "group": None,
+            "order": 20,
+        },
+        "authorization_json": {
+            "requiredPermissions": ["continued-education.view"],
+            "requiredFlags": ["continued-education.enabled"],
+        },
+        "compatibility_json": {
+            "shellContractMin": "v1",
+            "shellContractMax": "v1",
+        },
+        "metadata_json": {
+            "ownerTeam": "platform",
+            "frontend": {
+                "type": "module",
+                "enabled": True,
+                "mountFunction": "mount",
+                "basePath": "/education/continued-ed",
+            },
+            "backend": {
+                "enabled": True,
+                "healthEndpoint": "/api/education/continued-ed/health",
+            },
+        },
+    },
 ]
 
 
